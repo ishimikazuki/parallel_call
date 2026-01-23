@@ -29,17 +29,23 @@ alembic upgrade head
 
 ## Twilio (Real Account) Setup
 
-1. Find your Twilio credentials
-   - Log in to the Twilio Console and open the Dashboard.
-   - Copy your Account SID and Auth Token from the Account Info section.
-2. Get a Twilio phone number (CLI)
-   - List available numbers:
-     `twilio api:core:available-phone-numbers:local:list --country-code "US" --area-code "503"`
-   - Purchase a number:
-     `twilio api:core:incoming-phone-numbers:create --phone-number "+1XXXXXXXXXX"`
-   - Requires Twilio CLI to be installed and logged in with your account.
-3. (Trial accounts) Verify caller IDs
-   - Trial accounts can only call verified numbers; add destinations under Verified Caller IDs.
+1. Get your Account SID / Auth Token
+   - Log in to the Twilio Console Dashboard: https://console.twilio.com/
+   - In **Account Info**, copy **Account SID** and **Auth Token**.
+2. (Trial accounts) Verify caller IDs
+   - Trial accounts can only call verified numbers.
+   - Go to Verified Caller IDs and add the destination numbers you want to call:
+     https://www.twilio.com/console/phone-numbers/verified
+3. Get a Twilio phone number
+   - Console: In the Twilio Console, search and select a phone number by area code or number type.
+     Docs: https://www.twilio.com/en-us/phone-numbers
+     - Note: You may need to complete a verification process before calling or messaging.
+   - CLI (optional):
+     - Login (creates a CLI profile): `twilio login`
+     - List available numbers:
+       `twilio api:core:available-phone-numbers:local:list --area-code 503 --country-code US`
+     - Purchase a number:
+       `twilio api:core:incoming-phone-numbers:create --phone-number "+1XXXXXXXXXX"`
 4. Create `.env` in `backend/`:
 
 ```bash
