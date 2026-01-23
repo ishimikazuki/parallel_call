@@ -1,0 +1,1274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <metadata>
+    <name>ParallelDialer</name>
+    <codename>RapidConnect</codename>
+    <version>0.1.0</version>
+    <created>2026-01-16</created>
+    <author>Fixim LLC</author>
+    <description>
+      テレアポ業務効率化のための並列自動発信システム。
+      複数回線で同時発信し、人間が応答した通話のみを即座に空きオペレーターへ転送する。
+      オペレーターは待機時間ゼロで有効通話のみに集中できる。
+    </description>
+  </metadata>
+
+  <!-- ============================================================
+       1. プロジェクト概要
+       ============================================================ -->
+  <overview>
+    <business_context>
+      <problem>
+        テレアポ業務において、オペレーターの時間の70-80%は「ダイヤル→呼び出し→不在/留守電」の
+        非生産的なサイクルに費やされている。有効な会話時間は全体の20%程度に過ぎない。
+      </problem>
+      <solution>
+        システムが並列で複数番号に発信し、人間が応答した通話のみをオペレーターに即時転送する。
+        オペレーターは常に「人間との会話」のみに従事でき、生産性が3-5倍向上する。
+      </solution>
+      <target_users>
+        <user type="primary">テレアポ代行会社</user>
+        <user type="primary">インサイドセールスチーム</user>
+        <user type="secondary">督促業務を行う企業</user>
+        <user type="secondary">アンケート調査会社</user>
+      </target_users>
+    </business_context>
+
+    <service_model>
+      <type>SaaS</type>
+      <pricing_model>席数ベース（オペレーター数課金）</pricing_model>
+      <deployment>マルチテナント型クラウドサービス</deployment>
+      <also_used_as>Plug to Own（自社BPOサービス）の内部ツール</also_used_as>
+    </service_model>
+
+    <success_metrics>
+      <metric name="有効通話率" target="現状比 300-500% 向上" />
+      <metric name="オペレーター稼働率" target="80%以上（通話中 or 後処理中）" />
+      <metric name="転送レイテンシー" target="2秒以内" />
+      <metric name="放棄呼率" target="3%以下" />
+    </success_metrics>
+  </overview>
+
+  <!-- ============================================================
+       2. 機能要件
+       ============================================================ -->
+  <functional_requirements>
+    
+    <!-- MVP機能（Phase 1） -->
+    <phase name="MVP" priority="P0">
+      
+      <feature id="F001" name="並列自動発信">
+        <description>
+          架電リストに基づき、複数回線で同時に発信する。
+          空きオペレーター数に応じて発信数を動的に調整する。
+        </description>
+        <requirements>
+          <req id="F001-1">最大同時発信数: オペレーター数 × 設定倍率（デフォルト3-5倍）</req>
+          <req id="F001-2">発信倍率は接続率に基づき自動調整（Predictive Algorithm）</req>
+          <req id="F001-3">発信間隔の制御（同一番号への再発信インターバル設定）</req>
+          <req id="F001-4">架電リストのインポート（CSV/Google Sheets連携）</req>
+          <req id="F001-5">発信スケジュール設定（曜日・時間帯）</req>
+        </requirements>
+        <acceptance_criteria>
+          <criterion>10人のオペレーターに対し、30-50回線の同時発信が安定稼働すること</criterion>
+          <criterion>発信開始から呼び出し音開始まで1秒以内</criterion>
+        </acceptance_criteria>
+      </feature>
+
+      <feature id="F002" name="応答検出（AMD: Answering Machine Detection）">
+        <description>
+          発信先が人間か留守電/FAX/ビジーかを自動判定する。
+          人間が応答した場合のみ転送処理に進む。
+        </description>
+        <requirements>
+          <req id="F002-1">判定種別: human / voicemail / fax / busy / no_answer / failed</req>
+          <req id="F002-2">判定精度: 95%以上（人間を留守電と誤判定する率 5%以下）</req>
+          <req id="F002-3">判定速度: 応答から2秒以内に判定完了</req>
+          <req id="F002-4">留守電検出時の動作: 即切断（メッセージ残さない）</req>
+          <req id="F002-5">判定結果のログ記録</req>
+        </requirements>
+        <technical_notes>
+          TwilioのMachine Detection機能（DetectMessageEnd モード）を使用。
+          または、音声の最初の2秒間のパターン分析で判定。
+          AIによる会話は行わない。応答検出のみ。
+        </technical_notes>
+      </feature>
+
+      <feature id="F003" name="即時転送">
+        <description>
+          人間応答を検出後、2秒以内に空きオペレーターへ通話を転送する。
+          転送方式はCold Transfer（AIは発話せず無言で切り替え）。
+        </description>
+        <requirements>
+          <req id="F003-1">転送レイテンシー: 2秒以内（応答検出完了から音声接続まで）</req>
+          <req id="F003-2">空きオペレーターへの自動ルーティング（最長待機者優先）</req>
+          <req id="F003-3">全オペレーターがビジーの場合の処理:
+            - 短時間（5秒以内）なら保留音で待機
+            - 超過したら「後ほどおかけ直しします」で切断、リストに再登録
+          </req>
+          <req id="F003-4">転送失敗時のフォールバック処理</req>
+          <req id="F003-5">オペレーター側で転送受け入れ前にリード情報をポップアップ表示</req>
+        </requirements>
+        <technical_notes>
+          Conference Bridge方式を採用。
+          オペレーターは常にConferenceに待機状態で接続しておき、
+          人間応答時に通話をConferenceに参加させることで遅延を最小化。
+        </technical_notes>
+      </feature>
+
+      <feature id="F004" name="通話録音">
+        <description>
+          全通話を自動録音し、後から確認・分析できるようにする。
+        </description>
+        <requirements>
+          <req id="F004-1">オペレーター接続後の全通話を自動録音</req>
+          <req id="F004-2">録音ファイルはリード情報と紐付けて保存</req>
+          <req id="F004-3">録音ファイルの再生・ダウンロード機能</req>
+          <req id="F004-4">保存期間設定（デフォルト90日）</req>
+          <req id="F004-5">ストレージはクラウド（S3互換）</req>
+        </requirements>
+      </feature>
+
+      <feature id="F005" name="オペレーター管理ダッシュボード">
+        <description>
+          管理者がオペレーターの稼働状況をリアルタイムで監視し、
+          パフォーマンスを可視化するダッシュボード。
+          リモートワーク時のサボり検知も可能にする。
+        </description>
+        <requirements>
+          <req id="F005-1">リアルタイムステータス表示
+            - 各オペレーターの現在状態（通話中/待機中/後処理中/離席中）
+            - 状態の継続時間
+            - 本日の通話件数/通話時間
+          </req>
+          <req id="F005-2">パフォーマンス指標（リアルタイム + 日次/週次集計）
+            - 通話件数
+            - 総通話時間
+            - 平均通話時間（AHT: Average Handle Time）
+            - 後処理時間（ACW: After Call Work）
+            - 稼働率（通話中+後処理中の時間 / ログイン時間）
+            - 待機時間
+            - 離席時間・回数
+            - 転送拒否回数
+          </req>
+          <req id="F005-3">アラート機能
+            - 長時間離席アラート（設定可能、デフォルト10分）
+            - 長時間後処理アラート（設定可能、デフォルト5分）
+            - 異常な転送拒否率アラート
+          </req>
+          <req id="F005-4">キャンペーン全体指標
+            - 総発信数 / 接続数 / 有効通話数
+            - 接続率 / 放棄呼率
+            - リスト消化率
+          </req>
+        </requirements>
+        <anti_sabotage_metrics>
+          <!-- サボり検知のための取得データ -->
+          <metric name="idle_time" description="待機状態の累計時間。システムが自動転送するため、長すぎる待機は発信量不足か設定ミス" />
+          <metric name="away_time" description="離席状態の累計時間と回数" />
+          <metric name="away_frequency" description="離席の頻度（1時間あたり何回離席したか）" />
+          <metric name="acw_time" description="後処理時間。異常に長い場合はサボりの可能性" />
+          <metric name="acw_distribution" description="後処理時間の分布。他オペレーターと比較して異常値検出" />
+          <metric name="transfer_reject_count" description="転送を拒否（応答しなかった）回数" />
+          <metric name="calls_per_hour" description="1時間あたりの通話件数。他オペレーターとの比較" />
+          <metric name="talk_time_ratio" description="ログイン時間に対する実通話時間の比率" />
+          <metric name="status_change_log" description="ステータス変更の全履歴（タイムスタンプ付き）" />
+        </anti_sabotage_metrics>
+      </feature>
+
+      <feature id="F006" name="オペレーター用インターフェース">
+        <description>
+          オペレーターが通話を受け、ステータスを管理するためのWebアプリケーション。
+        </description>
+        <requirements>
+          <req id="F006-1">ブラウザベース（WebRTC使用、専用アプリ不要）</req>
+          <req id="F006-2">ステータス切り替え: 待機中 / 後処理中 / 離席中</req>
+          <req id="F006-3">着信時のリード情報ポップアップ表示
+            - 会社名 / 担当者名 / 電話番号
+            - 過去の架電履歴
+            - メモ欄
+          </req>
+          <req id="F006-4">通話後の結果入力（コール結果ステータス、メモ）</req>
+          <req id="F006-5">本日の自分の実績サマリー表示</req>
+        </requirements>
+      </feature>
+
+      <feature id="F007" name="架電リスト管理">
+        <description>
+          架電対象リストのインポート、管理、進捗追跡。
+        </description>
+        <requirements>
+          <req id="F007-1">CSVインポート（文字コード自動判定: UTF-8/Shift_JIS）</req>
+          <req id="F007-2">Google Sheets連携（OAuth認証）</req>
+          <req id="F007-3">重複番号の検出・除外</req>
+          <req id="F007-4">架電禁止リスト（DNC: Do Not Call）管理</req>
+          <req id="F007-5">リードステータス管理
+            - 未架電 / 発信中 / 不在 / 留守電 / 通話済み / アポ獲得 / NG / 再架電予約
+          </req>
+          <req id="F007-6">フィルタリング・検索機能</req>
+          <req id="F007-7">架電結果のエクスポート</req>
+        </requirements>
+      </feature>
+
+    </phase>
+
+    <!-- 拡張機能（Phase 2以降） -->
+    <phase name="Phase2" priority="P1">
+      
+      <feature id="F101" name="CRM連携（Salesforce）">
+        <description>
+          Salesforceとの双方向連携。リードのインポートと架電結果の自動同期。
+        </description>
+        <requirements>
+          <req id="F101-1">Salesforce OAuth認証</req>
+          <req id="F101-2">Lead/Contact/Accountオブジェクトからの架電リスト取得</req>
+          <req id="F101-3">架電結果のActivity（Task）自動作成</req>
+          <req id="F101-4">通話録音URLのSalesforceへの保存</req>
+          <req id="F101-5">カスタムフィールドマッピング設定</req>
+        </requirements>
+      </feature>
+
+      <feature id="F102" name="転送時のコンテキスト表示強化">
+        <description>
+          Cold Transferのまま、オペレーター画面に詳細なコンテキスト情報を表示。
+          無言で切り替わった後、オペレーターが即座に状況把握できる。
+        </description>
+        <requirements>
+          <req id="F102-1">転送直前にリード情報をオペレーター画面にプッシュ</req>
+          <req id="F102-2">過去の架電履歴・メモを時系列表示</req>
+          <req id="F102-3">推奨トークスクリプトの表示</req>
+        </requirements>
+      </feature>
+
+      <feature id="F103" name="リモートワーク対応">
+        <description>
+          オペレーターが自宅等から稼働できる環境整備。
+        </description>
+        <requirements>
+          <req id="F103-1">WebRTC品質の最適化（低帯域対応）</req>
+          <req id="F103-2">接続品質モニタリング</req>
+          <req id="F103-3">VPN不要のセキュアアクセス</req>
+        </requirements>
+      </feature>
+
+      <feature id="F104" name="AI音声による初期トーク">
+        <description>
+          将来的な拡張として、AIが最初の名乗りと用件を話してから転送する。
+        </description>
+        <requirements>
+          <req id="F104-1">設定で有効/無効を切り替え可能</req>
+          <req id="F104-2">日本語TTSによる自然な発話</req>
+          <req id="F104-3">相手の反応（興味あり/なし）に応じた転送判断</req>
+        </requirements>
+        <status>将来検討</status>
+      </feature>
+
+    </phase>
+
+    <!-- コンプライアンス関連（今後の課題） -->
+    <phase name="Compliance" priority="P2">
+      <note>以下は今後対応が必要な課題としてメモ</note>
+      
+      <feature id="C001" name="特定商取引法対応">
+        <requirements>
+          <req id="C001-1">発信者番号通知の必須化</req>
+          <req id="C001-2">架電拒否（オプトアウト）の即時反映</req>
+          <req id="C001-3">架電禁止時間帯の自動制御（例: 21時以降禁止）</req>
+          <req id="C001-4">事業者名の告知義務への対応</req>
+        </requirements>
+      </feature>
+
+      <feature id="C002" name="通話録音同意">
+        <requirements>
+          <req id="C002-1">録音開始前の同意取得フロー</req>
+          <req id="C002-2">録音同意の記録</req>
+        </requirements>
+      </feature>
+
+      <feature id="C003" name="個人情報保護">
+        <requirements>
+          <req id="C003-1">データ暗号化（保存時・通信時）</req>
+          <req id="C003-2">アクセスログ</req>
+          <req id="C003-3">データ削除機能</req>
+        </requirements>
+      </feature>
+    </phase>
+
+  </functional_requirements>
+
+  <!-- ============================================================
+       3. 非機能要件
+       ============================================================ -->
+  <non_functional_requirements>
+    
+    <performance>
+      <requirement id="NFR-P1" name="転送レイテンシー">
+        応答検出完了からオペレーター接続まで2秒以内
+      </requirement>
+      <requirement id="NFR-P2" name="同時通話数">
+        最低50同時通話をサポート（初期10オペレーター × 5倍発信）
+      </requirement>
+      <requirement id="NFR-P3" name="ダッシュボード更新">
+        リアルタイム指標は1秒以内に反映
+      </requirement>
+      <requirement id="NFR-P4" name="API応答時間">
+        95パーセンタイルで200ms以内
+      </requirement>
+    </performance>
+
+    <scalability>
+      <requirement id="NFR-S1" name="水平スケーリング">
+        オペレーター数増加に応じてテレフォニーワーカーを水平スケール可能な設計
+      </requirement>
+      <requirement id="NFR-S2" name="マルチテナント">
+        複数企業（テナント）が同一インフラを共有、データは完全分離
+      </requirement>
+      <requirement id="NFR-S3" name="将来規模">
+        将来的に100オペレーター、500同時通話まで対応可能なアーキテクチャ
+      </requirement>
+    </scalability>
+
+    <availability>
+      <requirement id="NFR-A1" name="稼働率">
+        99.9%（月間ダウンタイム43分以内）
+      </requirement>
+      <requirement id="NFR-A2" name="障害復旧">
+        単一コンポーネント障害時も通話継続（graceful degradation）
+      </requirement>
+    </availability>
+
+    <security>
+      <requirement id="NFR-SEC1" name="通信暗号化">
+        全通信TLS 1.3、音声はSRTP
+      </requirement>
+      <requirement id="NFR-SEC2" name="認証">
+        JWT + リフレッシュトークン方式
+      </requirement>
+      <requirement id="NFR-SEC3" name="データ暗号化">
+        保存データはAES-256で暗号化
+      </requirement>
+      <requirement id="NFR-SEC4" name="監査ログ">
+        全操作の監査ログ記録
+      </requirement>
+    </security>
+
+  </non_functional_requirements>
+
+  <!-- ============================================================
+       4. システムアーキテクチャ
+       ============================================================ -->
+  <architecture>
+    
+    <overview>
+      <diagram><![CDATA[
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            Client Layer                                  │
+│  ┌─────────────────────┐    ┌─────────────────────────────────────┐     │
+│  │  Admin Dashboard    │    │  Operator Web App                   │     │
+│  │  (React + Vite)     │    │  (React + WebRTC + WebSocket)       │     │
+│  └──────────┬──────────┘    └──────────────────┬──────────────────┘     │
+└─────────────┼──────────────────────────────────┼────────────────────────┘
+              │ HTTPS                            │ WSS + WebRTC
+              ▼                                  ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                            API Gateway                                   │
+│                    (nginx / AWS ALB / Cloudflare)                       │
+│                    - SSL Termination                                     │
+│                    - Rate Limiting                                       │
+│                    - Load Balancing                                      │
+└─────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         Application Layer                                │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                     API Server (FastAPI)                         │    │
+│  │  - REST API (リスト管理、設定、レポート)                          │    │
+│  │  - WebSocket Server (リアルタイム通知)                            │    │
+│  │  - Authentication / Authorization                                │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                   Dialer Orchestrator Service                    │    │
+│  │  - 発信キュー管理                                                 │    │
+│  │  - Predictive Algorithm (発信倍率計算)                           │    │
+│  │  - オペレーター空き状況管理                                       │    │
+│  │  - 転送ルーティング                                               │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                    Telephony Worker (複数インスタンス)            │    │
+│  │  - Twilio API連携                                                │    │
+│  │  - 発信処理                                                       │    │
+│  │  - AMD結果処理                                                    │    │
+│  │  - Conference Bridge管理                                         │    │
+│  │  - 録音管理                                                       │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                                                                          │
+│  ┌─────────────────────────────────────────────────────────────────┐    │
+│  │                    Metrics Collector Service                     │    │
+│  │  - オペレーター稼働データ収集                                     │    │
+│  │  - リアルタイム集計                                               │    │
+│  │  - アラート判定                                                   │    │
+│  └─────────────────────────────────────────────────────────────────┘    │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          Data Layer                                      │
+│                                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐  │
+│  │  PostgreSQL  │  │    Redis     │  │     S3       │  │ TimescaleDB│  │
+│  │  - テナント   │  │  - セッション │  │  - 録音ファイル│  │ - 時系列   │  │
+│  │  - リード     │  │  - キュー     │  │              │  │   メトリクス│  │
+│  │  - 通話履歴   │  │  - Pub/Sub   │  │              │  │            │  │
+│  │  - 設定      │  │  - キャッシュ  │  │              │  │            │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘  │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       External Services                                  │
+│                                                                          │
+│  ┌──────────────────────┐    ┌──────────────────────┐                   │
+│  │       Twilio         │    │    Google Sheets     │                   │
+│  │  - Programmable Voice│    │    API (リスト取込)   │                   │
+│  │  - SIP Trunking      │    │                      │                   │
+│  │  - Recording Storage │    │                      │                   │
+│  │  - AMD              │    │                      │                   │
+│  └──────────────────────┘    └──────────────────────┘                   │
+│                                                                          │
+│  ┌──────────────────────┐    ┌──────────────────────┐                   │
+│  │   Salesforce (P2)    │    │    SendGrid (通知)   │                   │
+│  │  - Lead/Contact同期  │    │                      │                   │
+│  │  - Activity記録      │    │                      │                   │
+│  └──────────────────────┘    └──────────────────────┘                   │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+      ]]></diagram>
+    </overview>
+
+    <components>
+      
+      <component name="API Server">
+        <technology>Python 3.12 + FastAPI</technology>
+        <responsibilities>
+          <item>REST API エンドポイント提供</item>
+          <item>WebSocket サーバー（リアルタイム更新）</item>
+          <item>認証・認可</item>
+          <item>入力バリデーション</item>
+        </responsibilities>
+        <scaling>水平スケーリング（ステートレス）</scaling>
+      </component>
+
+      <component name="Dialer Orchestrator">
+        <technology>Python 3.12 + asyncio</technology>
+        <responsibilities>
+          <item>架電キューの管理</item>
+          <item>発信ペーシング（Predictive Algorithm）</item>
+          <item>オペレーター空き状況のリアルタイム追跡</item>
+          <item>転送先ルーティング決定</item>
+          <item>放棄呼防止ロジック</item>
+        </responsibilities>
+        <scaling>
+          リーダー選出パターン（単一アクティブ + スタンバイ）
+          または、テナント単位でシャーディング
+        </scaling>
+        <key_algorithms>
+          <algorithm name="Predictive Dial Ratio">
+            <description>
+              放棄呼率を3%以下に抑えつつ、オペレーター稼働率を最大化する発信倍率を計算
+            </description>
+            <formula><![CDATA[
+dial_ratio = f(
+  available_operators,      # 現在の空きオペレーター数
+  avg_connect_rate,         # 過去N分間の接続率
+  avg_handle_time,          # 平均通話時間
+  avg_ring_time,            # 平均呼び出し時間
+  target_abandon_rate       # 目標放棄呼率（デフォルト0.03）
+)
+            ]]></formula>
+            <reference>Erlang-C式を応用</reference>
+          </algorithm>
+          <algorithm name="Operator Routing">
+            <description>転送先オペレーターの選択</description>
+            <strategy>最長待機時間優先（Longest Idle First）</strategy>
+            <fallback>ラウンドロビン</fallback>
+          </algorithm>
+        </key_algorithms>
+      </component>
+
+      <component name="Telephony Worker">
+        <technology>Python 3.12 + Twilio SDK + aiohttp</technology>
+        <responsibilities>
+          <item>Twilio APIを使った発信処理</item>
+          <item>Webhook受信（通話状態変更、AMD結果）</item>
+          <item>Conference Bridge の作成・管理</item>
+          <item>オペレーターへの転送実行</item>
+          <item>録音の開始・停止</item>
+        </responsibilities>
+        <scaling>水平スケーリング（通話数に応じて）</scaling>
+      </component>
+
+      <component name="Operator WebRTC Gateway">
+        <technology>
+          Twilio Client SDK (JavaScript) 
+          または MediaSoup/Janus (自前構築時)
+        </technology>
+        <responsibilities>
+          <item>ブラウザとの音声接続</item>
+          <item>Twilioとのブリッジ</item>
+        </responsibilities>
+        <note>
+          MVP段階ではTwilio Client SDKを使用し、自前構築は避ける
+        </note>
+      </component>
+
+      <component name="Metrics Collector">
+        <technology>Python + TimescaleDB</technology>
+        <responsibilities>
+          <item>オペレーターステータス変更イベントの収集</item>
+          <item>リアルタイム集計（待機時間、通話時間等）</item>
+          <item>アラート条件の評価</item>
+          <item>日次/週次レポート生成</item>
+        </responsibilities>
+      </component>
+
+    </components>
+
+    <data_models>
+      <model name="Tenant">
+        <field name="id" type="UUID" primary_key="true" />
+        <field name="name" type="VARCHAR(255)" />
+        <field name="settings" type="JSONB" description="発信設定、営業時間等" />
+        <field name="created_at" type="TIMESTAMP" />
+      </model>
+
+      <model name="User">
+        <field name="id" type="UUID" primary_key="true" />
+        <field name="tenant_id" type="UUID" foreign_key="Tenant.id" />
+        <field name="email" type="VARCHAR(255)" />
+        <field name="role" type="ENUM(admin, supervisor, operator)" />
+        <field name="password_hash" type="VARCHAR(255)" />
+      </model>
+
+      <model name="Campaign">
+        <field name="id" type="UUID" primary_key="true" />
+        <field name="tenant_id" type="UUID" foreign_key="Tenant.id" />
+        <field name="name" type="VARCHAR(255)" />
+        <field name="status" type="ENUM(draft, active, paused, completed)" />
+        <field name="caller_id" type="VARCHAR(20)" description="発信者番号" />
+        <field name="dial_ratio" type="FLOAT" description="発信倍率（自動/手動）" />
+        <field name="schedule" type="JSONB" description="稼働スケジュール" />
+      </model>
+
+      <model name="Lead">
+        <field name="id" type="UUID" primary_key="true" />
+        <field name="campaign_id" type="UUID" foreign_key="Campaign.id" />
+        <field name="phone_number" type="VARCHAR(20)" />
+        <field name="company_name" type="VARCHAR(255)" />
+        <field name="contact_name" type="VARCHAR(255)" />
+        <field name="status" type="ENUM(pending, calling, no_answer, voicemail, connected, callback, dnc)" />
+        <field name="priority" type="INTEGER" default="0" />
+        <field name="last_called_at" type="TIMESTAMP" />
+        <field name="call_count" type="INTEGER" default="0" />
+        <field name="custom_fields" type="JSONB" />
+      </model>
+
+      <model name="CallLog">
+        <field name="id" type="UUID" primary_key="true" />
+        <field name="lead_id" type="UUID" foreign_key="Lead.id" />
+        <field name="operator_id" type="UUID" foreign_key="User.id" nullable="true" />
+        <field name="started_at" type="TIMESTAMP" />
+        <field name="connected_at" type="TIMESTAMP" nullable="true" />
+        <field name="ended_at" type="TIMESTAMP" />
+        <field name="duration_seconds" type="INTEGER" />
+        <field name="amd_result" type="ENUM(human, voicemail, fax, busy, no_answer, failed)" />
+        <field name="disposition" type="VARCHAR(50)" description="通話結果コード" />
+        <field name="recording_url" type="VARCHAR(500)" />
+        <field name="notes" type="TEXT" />
+        <field name="twilio_call_sid" type="VARCHAR(50)" />
+      </model>
+
+      <model name="OperatorSession">
+        <description>オペレーターのログインセッションと稼働記録</description>
+        <field name="id" type="UUID" primary_key="true" />
+        <field name="operator_id" type="UUID" foreign_key="User.id" />
+        <field name="campaign_id" type="UUID" foreign_key="Campaign.id" />
+        <field name="started_at" type="TIMESTAMP" />
+        <field name="ended_at" type="TIMESTAMP" nullable="true" />
+      </model>
+
+      <model name="OperatorStatusLog" timeseries="true">
+        <description>オペレーターのステータス変更履歴（時系列）</description>
+        <field name="timestamp" type="TIMESTAMP" primary_key="true" />
+        <field name="operator_id" type="UUID" />
+        <field name="session_id" type="UUID" />
+        <field name="status" type="ENUM(available, on_call, acw, away)" />
+        <field name="call_id" type="UUID" nullable="true" />
+      </model>
+    </data_models>
+
+    <api_design>
+      <endpoint method="POST" path="/api/v1/campaigns/{id}/start">
+        <description>キャンペーンの発信開始</description>
+      </endpoint>
+      <endpoint method="POST" path="/api/v1/campaigns/{id}/pause">
+        <description>キャンペーンの一時停止</description>
+      </endpoint>
+      <endpoint method="GET" path="/api/v1/campaigns/{id}/stats">
+        <description>キャンペーン統計取得</description>
+      </endpoint>
+      <endpoint method="POST" path="/api/v1/leads/import">
+        <description>リードリストのインポート</description>
+      </endpoint>
+      <endpoint method="GET" path="/api/v1/operators/status">
+        <description>全オペレーターの現在ステータス</description>
+      </endpoint>
+      <endpoint method="PATCH" path="/api/v1/operators/me/status">
+        <description>自分のステータス変更</description>
+      </endpoint>
+      <endpoint method="GET" path="/api/v1/dashboard/realtime">
+        <description>リアルタイムダッシュボードデータ</description>
+      </endpoint>
+      <endpoint method="WS" path="/ws/operator">
+        <description>オペレーター用WebSocket（着信通知、ステータス同期）</description>
+      </endpoint>
+      <endpoint method="WS" path="/ws/dashboard">
+        <description>ダッシュボード用WebSocket（リアルタイム更新）</description>
+      </endpoint>
+      <endpoint method="POST" path="/webhooks/twilio/status">
+        <description>Twilioからの通話ステータスコールバック</description>
+      </endpoint>
+      <endpoint method="POST" path="/webhooks/twilio/amd">
+        <description>TwilioからのAMD結果コールバック</description>
+      </endpoint>
+    </api_design>
+
+  </architecture>
+
+  <!-- ============================================================
+       5. 技術スタック
+       ============================================================ -->
+  <technology_stack>
+    
+    <backend>
+      <language version="3.12">Python</language>
+      <framework>FastAPI</framework>
+      <async_runtime>asyncio + uvloop</async_runtime>
+      <packages>
+        <package name="fastapi" purpose="Web framework" />
+        <package name="uvicorn" purpose="ASGI server" />
+        <package name="pydantic" purpose="Data validation" />
+        <package name="sqlalchemy" purpose="ORM" />
+        <package name="asyncpg" purpose="PostgreSQL async driver" />
+        <package name="redis" purpose="Redis client (aioredis)" />
+        <package name="twilio" purpose="Twilio SDK" />
+        <package name="httpx" purpose="Async HTTP client" />
+        <package name="python-jose" purpose="JWT handling" />
+        <package name="passlib" purpose="Password hashing" />
+        <package name="celery" purpose="Background tasks (optional)" />
+      </packages>
+    </backend>
+
+    <frontend>
+      <framework>React 18</framework>
+      <build_tool>Vite</build_tool>
+      <language>TypeScript</language>
+      <packages>
+        <package name="@tanstack/react-query" purpose="Data fetching" />
+        <package name="zustand" purpose="State management" />
+        <package name="@twilio/voice-sdk" purpose="WebRTC voice" />
+        <package name="recharts" purpose="Charts" />
+        <package name="tailwindcss" purpose="Styling" />
+        <package name="shadcn/ui" purpose="UI components" />
+        <package name="react-router-dom" purpose="Routing" />
+      </packages>
+    </frontend>
+
+    <database>
+      <primary name="PostgreSQL" version="16">
+        <purpose>メインデータストア</purpose>
+        <hosting>AWS RDS / Cloud SQL / Supabase</hosting>
+      </primary>
+      <cache name="Redis" version="7">
+        <purpose>セッション、キュー、Pub/Sub、キャッシュ</purpose>
+        <hosting>AWS ElastiCache / Upstash / Railway</hosting>
+      </cache>
+      <timeseries name="TimescaleDB" optional="true">
+        <purpose>オペレーター稼働メトリクス</purpose>
+        <note>初期はPostgreSQLのパーティションテーブルで代用可</note>
+      </timeseries>
+    </database>
+
+    <storage>
+      <service name="S3" compatible="true">
+        <purpose>通話録音ファイル</purpose>
+        <options>AWS S3, Cloudflare R2, MinIO</options>
+      </service>
+    </storage>
+
+    <telephony>
+      <primary name="Twilio">
+        <services>
+          <service>Programmable Voice</service>
+          <service>SIP Trunking (将来的にコスト最適化時)</service>
+          <service>Recording</service>
+          <service>AMD (Answering Machine Detection)</service>
+          <service>Client SDK (WebRTC)</service>
+        </services>
+        <alternatives>
+          <alt name="Vonage" note="Twilio代替" />
+          <alt name="Asterisk + SIP Trunk" note="大規模時のコスト最適化" />
+        </alternatives>
+      </primary>
+    </telephony>
+
+    <infrastructure>
+      <hosting>AWS / GCP / Railway</hosting>
+      <container>Docker</container>
+      <orchestration>
+        <option name="ECS Fargate" for="AWS" />
+        <option name="Cloud Run" for="GCP" />
+        <option name="Railway" for="シンプル構成" />
+      </orchestration>
+      <ci_cd>GitHub Actions</ci_cd>
+      <monitoring>
+        <service name="Datadog" purpose="APM, Logs" />
+        <service name="Sentry" purpose="Error tracking" />
+        <alternative name="Grafana + Loki" purpose="Self-hosted option" />
+      </monitoring>
+    </infrastructure>
+
+  </technology_stack>
+
+  <!-- ============================================================
+       6. 代替アーキテクチャ案
+       ============================================================ -->
+  <alternative_architectures>
+    
+    <alternative name="Asterisk自前構築">
+      <description>
+        Twilioを使わず、Asterisk/FreeSWITCH + SIPトランクで構築。
+        通話単価を大幅に削減できる。
+      </description>
+      <pros>
+        <pro>通話コスト50-70%削減（特に大量発信時）</pro>
+        <pro>完全なカスタマイズ性</pro>
+        <pro>外部依存の削減</pro>
+      </pros>
+      <cons>
+        <con>初期開発コスト・期間が大幅増</con>
+        <con>運用・保守の複雑さ</con>
+        <con>SIPの専門知識が必要</con>
+        <con>WebRTCゲートウェイも自前構築が必要</con>
+      </cons>
+      <recommendation>
+        MVP段階では不採用。月間通話コストが100万円を超えるスケールになったら検討。
+      </recommendation>
+    </alternative>
+
+    <alternative name="OpenAI Realtime API直接統合">
+      <description>
+        OpenAIのRealtime APIがSIPを直接サポートしているため、
+        AMD + AI会話 + 転送を一気通貫で実現可能。
+      </description>
+      <pros>
+        <pro>将来的なAI会話機能追加が容易</pro>
+        <pro>低レイテンシー（500ms以下）</pro>
+      </pros>
+      <cons>
+        <con>現時点ではAI会話が不要なのでオーバースペック</con>
+        <con>コストが読みにくい</con>
+      </cons>
+      <recommendation>
+        Phase 2でAI初期トークを実装する際に再検討。
+      </recommendation>
+    </alternative>
+
+    <alternative name="既存SaaSの利用">
+      <description>
+        Elto, PowerDialer.ai, CloudTalk等の既存サービスを利用。
+      </description>
+      <pros>
+        <pro>開発不要、即導入可能</pro>
+        <pro>実績あり</pro>
+      </pros>
+      <cons>
+        <con>日本語対応・日本市場向けUIが弱い</con>
+        <con>カスタマイズ性の制限</con>
+        <con>自社サービス化できない</con>
+        <con>他社との差別化困難</con>
+      </cons>
+      <recommendation>
+        自社BPOで使うだけなら検討の余地あり。
+        SaaS化を目指すなら自前構築必須。
+      </recommendation>
+    </alternative>
+
+  </alternative_architectures>
+
+  <!-- ============================================================
+       7. 海外類似サービス（参考）
+       ============================================================ -->
+  <competitors>
+    
+    <service name="Elto">
+      <url>https://www.eltodialer.com/</url>
+      <description>
+        AI Parallel Dialerの先駆け。複数番号同時発信、人間応答検出、
+        ミリ秒単位でオペレーターに接続。Apollo.io等との深い連携。
+      </description>
+      <features>
+        <feature>5回線並列発信</feature>
+        <feature>30%高速なAMD</feature>
+        <feature>CRM連携（Apollo, HubSpot, Salesforce）</feature>
+        <feature>自動ボイスメール投下</feature>
+      </features>
+      <pricing>不明（要問合せ）</pricing>
+      <learnings>
+        UI/UXが非常にシンプル。オペレーターは最小限の操作で通話に集中できる設計。
+      </learnings>
+    </service>
+
+    <service name="PowerDialer.ai">
+      <url>https://www.powerdialer.ai/</url>
+      <description>
+        5番号同時発信、AI要約、予測ダイヤリング。
+        Salesforce、HubSpot、Zoho等と連携。
+      </description>
+      <features>
+        <feature>Parallel / Predictive / Progressive モード切替</feature>
+        <feature>AI通話要約</feature>
+        <feature>リアルタイム分析</feature>
+        <feature>TCPA準拠機能</feature>
+      </features>
+      <pricing>$0-199/月（席数無制限プランあり）</pricing>
+      <learnings>
+        複数のダイヤルモードを提供し、キャンペーンの性質に応じて使い分け可能にしている。
+      </learnings>
+    </service>
+
+    <service name="CloudTalk">
+      <url>https://www.cloudtalk.io/</url>
+      <description>
+        多機能コールセンターソフトウェア。パラレルダイヤラー、
+        パワーダイヤラー、プレビューダイヤラーを統合。
+      </description>
+      <features>
+        <feature>10回線並列発信</feature>
+        <feature>180カ国のローカル番号</feature>
+        <feature>AIボイスメール検出</feature>
+        <feature>リアルタイムダッシュボード</feature>
+      </features>
+      <pricing>Expert plan + Parallel Dialer add-on</pricing>
+      <learnings>
+        グローバル展開を見据えたローカル番号対応が充実。
+      </learnings>
+    </service>
+
+    <service name="Regal.ai">
+      <url>https://www.regal.ai/</url>
+      <description>
+        AIエージェントがプレディクティブダイヤラーを駆動。
+        24/7稼働、人間不要のアウトバウンドも可能。
+      </description>
+      <features>
+        <feature>AI Agentによる自動架電</feature>
+        <feature>Progressive Dial for AI</feature>
+        <feature>Warm Transfer対応</feature>
+        <feature>SIP統合</feature>
+      </features>
+      <learnings>
+        AIエージェントと人間オペレーターのハイブリッド運用に先進的。
+        将来のAI会話機能実装時の参考になる。
+      </learnings>
+    </service>
+
+    <service name="Voiso">
+      <url>https://voiso.com/</url>
+      <description>
+        AI Predictive Dialer。リアルタイムでダイヤル速度を最適化。
+        AMD、ローカルプレゼンス対応。
+      </description>
+      <features>
+        <feature>100-300 calls/hour per agent</feature>
+        <feature>AIベースAMD</feature>
+        <feature>ローカル番号自動選択（5x応答率向上）</feature>
+      </features>
+      <learnings>
+        ローカルプレゼンス（発信先に近い市外局番で発信）で応答率向上。
+        日本でも03/06等の使い分けで効果がありそう。
+      </learnings>
+    </service>
+
+  </competitors>
+
+  <!-- ============================================================
+       8. 開発ロードマップ
+       ============================================================ -->
+  <roadmap>
+    
+    <phase name="Phase 0: 技術検証" duration="1週間">
+      <goals>
+        <goal>Twilio AMDの精度検証（日本の電話環境で）</goal>
+        <goal>Conference Bridge転送のレイテンシー計測</goal>
+        <goal>WebRTC（Twilio Client SDK）の動作確認</goal>
+      </goals>
+      <deliverables>
+        <deliverable>技術検証レポート</deliverable>
+        <deliverable>PoC用の最小実装</deliverable>
+      </deliverables>
+    </phase>
+
+    <phase name="Phase 1: MVP" duration="6-8週間">
+      <sprint name="Sprint 1-2: 基盤構築">
+        <tasks>
+          <task>プロジェクトセットアップ（リポジトリ、CI/CD、開発環境）</task>
+          <task>DBスキーマ設計・マイグレーション</task>
+          <task>認証・認可基盤</task>
+          <task>テナント管理API</task>
+        </tasks>
+      </sprint>
+      <sprint name="Sprint 3-4: コア機能（発信・転送）">
+        <tasks>
+          <task>Dialer Orchestrator実装</task>
+          <task>Telephony Worker実装</task>
+          <task>AMD統合</task>
+          <task>Conference Bridge転送</task>
+          <task>Twilio Webhookハンドラー</task>
+        </tasks>
+      </sprint>
+      <sprint name="Sprint 5-6: オペレーター機能">
+        <tasks>
+          <task>オペレーターWebアプリ（React）</task>
+          <task>WebRTC音声接続</task>
+          <task>ステータス管理</task>
+          <task>着信ポップアップ</task>
+        </tasks>
+      </sprint>
+      <sprint name="Sprint 7-8: 管理機能">
+        <tasks>
+          <task>管理ダッシュボード</task>
+          <task>架電リスト管理（CSV/Sheets連携）</task>
+          <task>録音管理</task>
+          <task>レポート機能</task>
+        </tasks>
+      </sprint>
+      <deliverables>
+        <deliverable>動作するMVP</deliverable>
+        <deliverable>社内テスト完了</deliverable>
+      </deliverables>
+    </phase>
+
+    <phase name="Phase 2: 安定化・機能拡張" duration="4-6週間">
+      <tasks>
+        <task>負荷テスト・パフォーマンスチューニング</task>
+        <task>Salesforce連携</task>
+        <task>転送時コンテキスト表示強化</task>
+        <task>アラート機能強化</task>
+        <task>マルチテナント対応強化</task>
+      </tasks>
+    </phase>
+
+    <phase name="Phase 3: スケール" duration="ongoing">
+      <tasks>
+        <task>大規模顧客対応</task>
+        <task>コスト最適化（Asterisk検討）</task>
+        <task>AI会話機能（オプション）</task>
+      </tasks>
+    </phase>
+
+  </roadmap>
+
+  <!-- ============================================================
+       9. リスクと対策
+       ============================================================ -->
+  <risks>
+    
+    <risk id="R001" severity="high">
+      <title>AMD精度問題</title>
+      <description>
+        日本の留守電・IVRは米国と異なるパターンが多く、
+        TwilioのAMDが誤判定する可能性がある。
+      </description>
+      <mitigation>
+        <action>Phase 0で日本の電話環境でのAMD精度を検証</action>
+        <action>誤判定率が高い場合、独自の音声パターン分析を追加</action>
+        <action>最悪、AMD無効化オプションを用意（全接続を転送）</action>
+      </mitigation>
+    </risk>
+
+    <risk id="R002" severity="high">
+      <title>転送レイテンシー</title>
+      <description>
+        2秒以内の転送が実現できない場合、顧客体験が悪化。
+        「もしもし」と言っても無音が続くと切られる。
+      </description>
+      <mitigation>
+        <action>Conference Bridge事前準備で待機時間を最小化</action>
+        <action>Twilio Media Streamsで低レイテンシー実現</action>
+        <action>東京リージョンのTwilioを使用</action>
+      </mitigation>
+    </risk>
+
+    <risk id="R003" severity="medium">
+      <title>放棄呼問題</title>
+      <description>
+        同時接続が多すぎると、オペレーターが足りず通話が放棄される。
+        顧客からの苦情、法的リスクにつながる可能性。
+      </description>
+      <mitigation>
+        <action>Predictive Algorithmで放棄呼率3%以下を維持</action>
+        <action>リアルタイムモニタリングで即座に発信倍率を調整</action>
+        <action>放棄呼発生時は保留音 + 短時間後切断でソフトランディング</action>
+      </mitigation>
+    </risk>
+
+    <risk id="R004" severity="medium">
+      <title>Twilio依存</title>
+      <description>
+        Twilioの障害・価格改定・日本市場からの撤退リスク。
+      </description>
+      <mitigation>
+        <action>Telephony層を抽象化し、他プロバイダーへの切り替えを容易に</action>
+        <action>Vonage等の代替プロバイダーを事前検証</action>
+      </mitigation>
+    </risk>
+
+    <risk id="R005" severity="medium">
+      <title>コンプライアンス</title>
+      <description>
+        特定商取引法、個人情報保護法への対応が不十分だと
+        行政指導や訴訟リスク。
+      </description>
+      <mitigation>
+        <action>Phase 2でコンプライアンス機能を優先実装</action>
+        <action>法務専門家へのレビュー依頼</action>
+        <action>利用規約での顧客責任明確化</action>
+      </mitigation>
+    </risk>
+
+  </risks>
+
+  <!-- ============================================================
+       10. 用語集
+       ============================================================ -->
+  <glossary>
+    <term name="AMD">
+      Answering Machine Detection。留守電・FAX・人間を自動判別する技術。
+    </term>
+    <term name="AHT">
+      Average Handle Time。平均通話処理時間（通話時間 + 後処理時間）。
+    </term>
+    <term name="ACW">
+      After Call Work。通話終了後の後処理時間（メモ入力等）。
+    </term>
+    <term name="Cold Transfer">
+      通話を別の担当者に転送する際、引き継ぎなしで即座に切り替える方式。
+    </term>
+    <term name="Warm Transfer">
+      転送前に現担当者が次の担当者に状況を説明してから切り替える方式。
+    </term>
+    <term name="Conference Bridge">
+      複数の通話参加者を1つの会議通話に接続する仕組み。
+    </term>
+    <term name="DNC">
+      Do Not Call。架電禁止リスト。
+    </term>
+    <term name="Predictive Dialer">
+      オペレーターの空き状況を予測して自動発信数を調整するシステム。
+    </term>
+    <term name="SIP">
+      Session Initiation Protocol。VoIP通話のセッション制御プロトコル。
+    </term>
+    <term name="WebRTC">
+      Web Real-Time Communication。ブラウザ間でリアルタイム音声・映像通信を行う技術。
+    </term>
+    <term name="Erlang-C">
+      コールセンターの必要オペレーター数を計算する数学モデル。
+    </term>
+  </glossary>
+
+  <!-- ============================================================
+       11. 実装ガイド（Claude Code向け）
+       ============================================================ -->
+  <implementation_guide>
+    
+    <directory_structure><![CDATA[
+parallel-dialer/
+├── backend/
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── main.py                 # FastAPI app entry point
+│   │   ├── config.py               # Settings (pydantic-settings)
+│   │   ├── api/
+│   │   │   ├── __init__.py
+│   │   │   ├── deps.py             # Dependency injection
+│   │   │   ├── v1/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── auth.py
+│   │   │   │   ├── campaigns.py
+│   │   │   │   ├── leads.py
+│   │   │   │   ├── operators.py
+│   │   │   │   ├── dashboard.py
+│   │   │   │   └── webhooks.py     # Twilio webhooks
+│   │   ├── core/
+│   │   │   ├── __init__.py
+│   │   │   ├── security.py         # JWT, password hashing
+│   │   │   └── exceptions.py
+│   │   ├── models/
+│   │   │   ├── __init__.py
+│   │   │   ├── tenant.py
+│   │   │   ├── user.py
+│   │   │   ├── campaign.py
+│   │   │   ├── lead.py
+│   │   │   └── call_log.py
+│   │   ├── schemas/
+│   │   │   ├── __init__.py
+│   │   │   └── ...                 # Pydantic schemas
+│   │   ├── services/
+│   │   │   ├── __init__.py
+│   │   │   ├── dialer_orchestrator.py
+│   │   │   ├── telephony_worker.py
+│   │   │   ├── twilio_service.py
+│   │   │   ├── operator_manager.py
+│   │   │   └── metrics_service.py
+│   │   ├── websocket/
+│   │   │   ├── __init__.py
+│   │   │   ├── operator_ws.py
+│   │   │   └── dashboard_ws.py
+│   │   └── db/
+│   │       ├── __init__.py
+│   │       ├── session.py
+│   │       └── migrations/
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── pyproject.toml
+│   └── alembic.ini
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx
+│   │   ├── main.tsx
+│   │   ├── components/
+│   │   │   ├── operator/
+│   │   │   │   ├── OperatorPanel.tsx
+│   │   │   │   ├── CallPopup.tsx
+│   │   │   │   └── StatusToggle.tsx
+│   │   │   └── dashboard/
+│   │   │       ├── RealtimeStats.tsx
+│   │   │       ├── OperatorList.tsx
+│   │   │       └── CampaignProgress.tsx
+│   │   ├── hooks/
+│   │   │   ├── useWebSocket.ts
+│   │   │   ├── useTwilioDevice.ts
+│   │   │   └── useOperatorStatus.ts
+│   │   ├── services/
+│   │   │   └── api.ts
+│   │   └── stores/
+│   │       └── operatorStore.ts
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── tailwind.config.js
+├── docker-compose.yml
+├── .env.example
+└── README.md
+    ]]></directory_structure>
+
+    <key_implementation_notes>
+      <note topic="Twilio Conference Bridge Pattern">
+        オペレーターは常にConference Roomに接続しておく。
+        通話が来たらそのConferenceに顧客を参加させる。
+        これにより転送レイテンシーを最小化。
+        
+        ```python
+        # オペレーター接続時
+        conference_name = f"op_{operator_id}"
+        twiml = VoiceResponse()
+        dial = twiml.dial()
+        dial.conference(
+            conference_name,
+            start_conference_on_enter=True,
+            end_conference_on_exit=False,
+            wait_url="/hold-music"
+        )
+        
+        # 顧客接続時（AMD human判定後）
+        twiml = VoiceResponse()
+        dial = twiml.dial()
+        dial.conference(
+            target_conference,
+            start_conference_on_enter=True,
+            beep=False
+        )
+        ```
+      </note>
+
+      <note topic="オペレーター空き管理">
+        Redisの Sorted Set を使用。
+        スコアは「待機開始タイムスタンプ」。
+        最長待機者 = 最小スコアの要素。
+        
+        ```python
+        # 空き状態に変更時
+        await redis.zadd("available_operators:{tenant_id}", {operator_id: timestamp})
+        
+        # 転送先取得時
+        result = await redis.zpopmin("available_operators:{tenant_id}")
+        ```
+      </note>
+
+      <note topic="Predictive Algorithm 簡易版">
+        初期実装は単純な倍率固定 + 放棄呼率監視でOK。
+        放棄呼が増えたら倍率を下げ、待機時間が長すぎたら上げる。
+        
+        ```python
+        def calculate_dial_ratio(stats: CampaignStats) -> float:
+            base_ratio = 3.0
+            
+            if stats.abandon_rate > 0.05:
+                return max(1.0, base_ratio - 1.0)
+            elif stats.avg_idle_time > 30:  # 30秒以上待機
+                return min(5.0, base_ratio + 0.5)
+            
+            return base_ratio
+        ```
+      </note>
+
+      <note topic="WebSocket メッセージ設計">
+        オペレーター向け:
+        - incoming_call: 着信通知（リード情報付き）
+        - call_connected: 通話接続完了
+        - call_ended: 通話終了
+        - status_update: ステータス同期
+        
+        ダッシュボード向け:
+        - operator_status_changed: オペレーターステータス変更
+        - campaign_stats_updated: キャンペーン統計更新
+        - alert: アラート通知
+      </note>
+    </key_implementation_notes>
+
+    <testing_strategy>
+      <unit_tests>
+        - Predictive Algorithm のロジック
+        - オペレータールーティングロジック
+        - データ変換・バリデーション
+      </unit_tests>
+      <integration_tests>
+        - Twilio Webhook ハンドリング（ngrok + Twilio sandbox）
+        - WebSocket 接続・メッセージング
+        - DB CRUD 操作
+      </integration_tests>
+      <e2e_tests>
+        - 発信 → AMD → 転送 → 通話終了 の一連フロー
+        - オペレーターステータス変更 → ダッシュボード反映
+      </e2e_tests>
+    </testing_strategy>
+
+  </implementation_guide>
+
+</project>
