@@ -1,24 +1,19 @@
-# 現在の作業: 完了 🎉
+# 現在の作業: Step3 Twilio実アカウント接続
 
 ## ゴール
-- TDDでParallelDialerの全Phase実装完了
+- Twilio実アカウントで発信ができる状態にする
 
-## 進捗
-- [x] Phase 0: Project Setup
-- [x] Phase 1: Domain Models (TDD)
-- [x] Phase 2: API Layer (TDD)
-- [x] Phase 3: WebSocket (TDD)
-- [x] Phase 4: Frontend Components & Hooks
-- [x] Phase 5: E2E Tests
+## 進捗 (常に最新に更新)
+- [ ] Twilioアカウント情報の用意（SID/Auth Token/Phone Number）
+- [ ] .env に認証情報設定
+- [ ] MockTwilioService → RealTwilioService 切替
+- [ ] 発信フローの簡易動作確認
 
-## テスト結果
-- Backend Unit: 131 tests
-- Backend E2E: 36 tests
-- Frontend: 60 tests
-- **Total: 227 tests passing**
+## 発見・予想外のこと
+- 2026-01-23: まだなし
 
-## 次のステップ（オプション）
-- Twilio実アカウント接続
-- PostgreSQL + Redis 実装（現在はin-memory）
-- Playwright E2E テスト追加
-- 本番デプロイ設定
+## 決定したこと
+- 2026-01-23: まず Campaign/Lead をDB化し、他機能は後から段階移行する方針
+
+## メモ
+- 実アカウントは課金が発生する可能性があるため事前確認

@@ -28,6 +28,7 @@
 - 2025-01-17: Twilio統合はProtocolパターンでDI可能に設計
 - 2025-01-17: 開発時認証はシンプルハッシュ（Python 3.13 + bcrypt問題回避）
 - 2025-01-23: 全Phase完了、227テスト通過（Backend 167 + Frontend 60）
+- 2026-01-23: Campaign/Lead を SQLAlchemy + Alembic で永続化
 
 ## ログ参照
 → PROJECT_LOG/INDEX.md
