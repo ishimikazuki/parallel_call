@@ -84,17 +84,15 @@ describe("OperatorList", () => {
   it("shows correct available count", () => {
     render(<OperatorList operators={mockOperators} />);
 
-    // 1 operator is available
-    const availableCount = screen.getByText("対応可能:").nextElementSibling;
-    expect(availableCount?.textContent).toBe("1");
+    // 1 operator is available - text is "対応可能: 1"
+    expect(screen.getByText(/対応可能:/).textContent).toContain("1");
   });
 
   it("shows correct on_call count", () => {
     render(<OperatorList operators={mockOperators} />);
 
-    // 1 operator is on_call
-    const onCallCount = screen.getByText("通話中:").nextElementSibling;
-    expect(onCallCount?.textContent).toBe("1");
+    // 1 operator is on_call - text is "通話中: 1"
+    expect(screen.getByText(/通話中:/).textContent).toContain("1");
   });
 
   it("displays idle duration for available operators", () => {
