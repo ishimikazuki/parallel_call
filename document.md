@@ -7,7 +7,7 @@
   - Frontend: React 18 + TypeScript + Vite
   - 通話: Twilio Voice SDK (WebRTC)
   - 状態管理: Zustand
-- 現在のフェーズ: Phase 4 完了（Frontend）、Phase 5 未着手
+- 現在のフェーズ: **全Phase完了** (Phase 0-5)
 
 ## 重要ルール・制約
 - TDD: テストファースト開発
@@ -27,6 +27,7 @@
 ## 重要な決定事項
 - 2025-01-17: Twilio統合はProtocolパターンでDI可能に設計
 - 2025-01-17: 開発時認証はシンプルハッシュ（Python 3.13 + bcrypt問題回避）
+- 2025-01-23: 全Phase完了、227テスト通過（Backend 167 + Frontend 60）
 
 ## ログ参照
 → PROJECT_LOG/INDEX.md
