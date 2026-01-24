@@ -80,7 +80,6 @@ export function useTwilioDevice({
 
         const device = new Device(token, {
           codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
-          enableRingingState: true,
         });
 
         // Device events

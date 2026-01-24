@@ -1,7 +1,7 @@
 """Dashboard WebSocket handler."""
 
 import json
-from typing import Any, Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy import func, select
