@@ -1,6 +1,6 @@
 """Auth API endpoints."""
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> dict[str, Any]:
     """Get current user from JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -101,7 +101,9 @@ async def refresh_token(request: TokenRefreshRequest) -> TokenRefreshResponse:
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(current_user: Annotated[dict, Depends(get_current_user)]) -> UserResponse:
+async def get_me(
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
+) -> UserResponse:
     """
     Get current user info.
     """

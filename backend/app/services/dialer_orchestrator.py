@@ -1,6 +1,7 @@
 """Dialer orchestrator - predictive dialing algorithm."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from app.models.campaign import Campaign, CampaignStats, CampaignStatus
 from app.models.lead import Lead
@@ -172,7 +173,7 @@ class DialerOrchestrator:
         # Pause if abandon rate exceeds 2x target
         return stats.abandon_rate > (self.target_abandon_rate * 2)
 
-    def get_dialing_health(self, stats: CampaignStats) -> dict[str, any]:
+    def get_dialing_health(self, stats: CampaignStats) -> dict[str, Any]:
         """
         Get health metrics for the dialing operation.
 

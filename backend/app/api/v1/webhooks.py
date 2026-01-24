@@ -1,5 +1,7 @@
 """Twilio webhook endpoints."""
 
+# ruff: noqa: N803
+
 from fastapi import APIRouter, Form, Response
 
 router = APIRouter(prefix="/webhooks/twilio", tags=["webhooks"])

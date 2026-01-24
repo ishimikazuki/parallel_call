@@ -2,7 +2,7 @@
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -82,8 +82,8 @@ class Campaign:
     _phone_numbers: set[str] = field(default_factory=set)  # 重複チェック用
 
     # Timestamps
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     completed_at: datetime | None = None
 
@@ -97,7 +97,7 @@ class Campaign:
 
     def _update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def add_lead(self, lead: Lead) -> None:
         """
@@ -187,7 +187,7 @@ class Campaign:
             raise InvalidCampaignStateError(self.status, "start", "no leads in campaign")
 
         self.status = CampaignStatus.RUNNING
-        self.started_at = datetime.now(timezone.utc)
+        self.started_at = datetime.now(UTC)
         self._update_timestamp()
 
     def pause(self) -> None:
@@ -241,7 +241,7 @@ class Campaign:
                 return False
 
         self.status = CampaignStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self._update_timestamp()
         return True
 

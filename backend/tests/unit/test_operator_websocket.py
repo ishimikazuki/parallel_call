@@ -1,12 +1,10 @@
 """Unit tests for Operator WebSocket."""
 
 import pytest
-from httpx import AsyncClient
 from starlette.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
-from app.websocket.connection_manager import manager, EventType, WebSocketMessage
 
 
 @pytest.fixture
@@ -38,13 +36,13 @@ class TestOperatorWebSocketConnection:
 
     def test_connect_without_token_fails(self, client: TestClient):
         """トークンなしで接続失敗"""
-        with pytest.raises(Exception):  # WebSocket close or error
+        with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect("/ws/operator") as websocket:
                 websocket.receive_json()
 
     def test_connect_with_invalid_token_fails(self, client: TestClient):
         """無効なトークンで接続失敗"""
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect("/ws/operator?token=invalid") as websocket:
                 websocket.receive_json()
 

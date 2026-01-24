@@ -1,5 +1,7 @@
 """Real Twilio service implementation."""
 
+from typing import Any
+
 from twilio.rest import Client
 
 from app.config import get_settings
@@ -32,7 +34,7 @@ class TwilioService(TwilioServiceProtocol):
         machine_detection: bool = True,
     ) -> CallResult:
         """Initiate an outbound call via Twilio."""
-        call_params = {
+        call_params: dict[str, Any] = {
             "to": to,
             "from_": from_ or self._from_number,
             "url": "http://demo.twilio.com/docs/voice.xml",  # TwiML instructions

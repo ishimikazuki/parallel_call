@@ -1,7 +1,7 @@
 """Campaign API endpoints."""
 
-from datetime import datetime, timezone
-from typing import Annotated
+from datetime import UTC, datetime
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -29,7 +29,7 @@ CAMPAIGNS_DB: dict[str, Campaign] = {}
 
 
 def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def _status_value(status: CampaignStatus | str) -> str:
@@ -114,7 +114,7 @@ async def _get_lead_count(session: AsyncSession, campaign_id: str) -> int:
 @router.post("", response_model=CampaignResponse, status_code=status.HTTP_201_CREATED)
 async def create_campaign(
     campaign_data: CampaignCreate,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignResponse:
     """Create a new campaign."""
@@ -144,7 +144,7 @@ async def create_campaign(
 
 @router.get("", response_model=list[CampaignResponse])
 async def list_campaigns(
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[CampaignResponse]:
     """List all campaigns."""
@@ -160,7 +160,7 @@ async def list_campaigns(
 @router.get("/{campaign_id}", response_model=CampaignResponse)
 async def get_campaign(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignResponse:
     """Get campaign by ID."""
@@ -174,7 +174,7 @@ async def get_campaign(
 @router.post("/{campaign_id}/start", response_model=CampaignResponse)
 async def start_campaign(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignResponse:
     """Start a campaign."""
@@ -202,7 +202,7 @@ async def start_campaign(
 @router.post("/{campaign_id}/pause", response_model=CampaignResponse)
 async def pause_campaign(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignResponse:
     """Pause a running campaign."""
@@ -226,7 +226,7 @@ async def pause_campaign(
 @router.post("/{campaign_id}/resume", response_model=CampaignResponse)
 async def resume_campaign(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignResponse:
     """Resume a paused campaign."""
@@ -250,7 +250,7 @@ async def resume_campaign(
 @router.post("/{campaign_id}/stop", response_model=CampaignResponse)
 async def stop_campaign(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignResponse:
     """Stop a campaign."""
@@ -274,7 +274,7 @@ async def stop_campaign(
 @router.get("/{campaign_id}/stats", response_model=CampaignStatsResponse)
 async def get_campaign_stats(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> CampaignStatsResponse:
     """Get campaign statistics."""
@@ -329,7 +329,7 @@ async def get_campaign_stats(
 async def add_lead(
     campaign_id: str,
     lead_data: LeadCreate,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> LeadResponse:
     """Add a lead to a campaign."""
@@ -349,7 +349,7 @@ async def add_lead(
             notes=lead_data.notes,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     existing = await session.execute(
         select(LeadDB.id).where(
@@ -393,7 +393,7 @@ async def add_lead(
 @router.get("/{campaign_id}/leads", response_model=list[LeadResponse])
 async def list_leads(
     campaign_id: str,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> list[LeadResponse]:
     """List all leads in a campaign."""
@@ -420,7 +420,7 @@ class ImportResult(BaseModel):
 async def import_leads(
     campaign_id: str,
     file: UploadFile,
-    current_user: Annotated[dict, Depends(get_current_user)],
+    current_user: Annotated[dict[str, Any], Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_session)],
 ) -> ImportResult:
     """
@@ -446,7 +446,7 @@ async def import_leads(
     try:
         result = parse_csv(content)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
     existing_numbers = set(
         (

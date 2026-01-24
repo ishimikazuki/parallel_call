@@ -1,9 +1,10 @@
 """Unit tests for Lead model."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from app.models.lead import Lead, LeadStatus, InvalidStatusTransitionError
+import pytest
+
+from app.models.lead import InvalidStatusTransitionError, Lead, LeadStatus
 
 
 class TestLeadCreation:
@@ -36,9 +37,9 @@ class TestLeadCreation:
 
     def test_lead_tracks_creation_time(self):
         """作成日時が記録される"""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         lead = Lead(phone_number="+818011112222")
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         assert before <= lead.created_at <= after
 
@@ -105,7 +106,7 @@ class TestLeadStatusTransitions:
         """リトライ回数に上限がある"""
         lead = Lead(phone_number="+818011112222", max_retries=3)
 
-        for i in range(3):
+        for _ in range(3):
             lead.start_calling()
             lead.fail(reason="busy")
             lead.retry()
@@ -132,7 +133,7 @@ class TestLeadCallHistory:
     def test_lead_tracks_last_called_at(self):
         """最終発信日時が記録される"""
         lead = Lead(phone_number="+818011112222")
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         lead.start_calling()
 
         assert lead.last_called_at is not None

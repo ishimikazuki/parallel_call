@@ -3,7 +3,7 @@
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -69,8 +69,8 @@ class Lead:
     max_retries: int = 3
 
     # Timestamps
-    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_called_at: datetime | None = None
 
     # Call history
@@ -85,7 +85,7 @@ class Lead:
 
     def _update_timestamp(self) -> None:
         """Update the updated_at timestamp."""
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def _can_transition_from(self, allowed_statuses: list[LeadStatus], action: str) -> None:
         """Check if transition is allowed from current status."""
@@ -100,7 +100,7 @@ class Lead:
         """
         self._can_transition_from([LeadStatus.PENDING], "start_calling")
         self.status = LeadStatus.CALLING
-        self.last_called_at = datetime.now(timezone.utc)
+        self.last_called_at = datetime.now(UTC)
         self._update_timestamp()
 
     def connect(self) -> None:
@@ -175,7 +175,7 @@ class Lead:
     def _record_call_attempt(self, outcome: str | None = None, reason: str | None = None) -> None:
         """Record a call attempt in history."""
         record: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "attempt_number": len(self.call_history) + 1,
         }
         if outcome:

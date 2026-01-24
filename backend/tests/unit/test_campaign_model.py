@@ -1,12 +1,13 @@
 """Unit tests for Campaign model."""
 
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
 from app.models.campaign import (
     Campaign,
-    CampaignStatus,
     CampaignStats,
+    CampaignStatus,
     InvalidCampaignStateError,
 )
 from app.models.lead import Lead
@@ -37,9 +38,9 @@ class TestCampaignCreation:
 
     def test_campaign_tracks_creation_time(self):
         """作成日時が記録される"""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         campaign = Campaign(name="テスト")
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         assert before <= campaign.created_at <= after
 

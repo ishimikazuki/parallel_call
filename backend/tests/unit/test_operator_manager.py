@@ -1,7 +1,6 @@
 """Unit tests for OperatorManager."""
 
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.services.operator_manager import (
     OperatorManager,
@@ -34,7 +33,7 @@ class TestOperatorSession:
     def test_operator_tracks_idle_time(self):
         """待機時間が追跡される"""
         operator = OperatorSession(id="op1", name="田中")
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         operator.go_online()
 
         assert operator.idle_since is not None
@@ -85,7 +84,7 @@ class TestOperatorRouting:
         """最も長く待機しているオペレーターを選択"""
         manager = OperatorManager()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         op1 = OperatorSession(id="op1", name="田中")
         op1.go_online()
@@ -124,7 +123,7 @@ class TestOperatorRouting:
         """休憩中のオペレーターはスキップ"""
         manager = OperatorManager()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         op1 = OperatorSession(id="op1", name="田中")
         op1.go_online()
@@ -248,7 +247,7 @@ class TestLongIdleAlert:
         """長時間待機のオペレーターを検出"""
         manager = OperatorManager(max_idle_seconds=60)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         op1 = OperatorSession(id="op1", name="田中")
         op1.go_online()

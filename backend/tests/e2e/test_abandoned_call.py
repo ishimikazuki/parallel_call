@@ -9,16 +9,15 @@ Tests the abandoned call scenario:
 6. Lead added to retry queue
 """
 
+
 import pytest
-from datetime import datetime, timedelta
-from starlette.testclient import TestClient
 from fastapi import status
+from starlette.testclient import TestClient
 
 from app.main import app
-from app.models.lead import LeadStatus
 from app.models.campaign import CampaignStats
-from app.services.operator_manager import OperatorManager, OperatorSession, OperatorStatus
 from app.services.dialer_orchestrator import DialerOrchestrator
+from app.services.operator_manager import OperatorManager, OperatorSession, OperatorStatus
 
 
 @pytest.fixture

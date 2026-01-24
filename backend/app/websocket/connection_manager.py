@@ -1,9 +1,8 @@
 """WebSocket connection manager."""
 
-import asyncio
 import json
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -37,7 +36,7 @@ class WebSocketMessage:
 
     event: EventType
     data: dict[str, Any]
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_json(self) -> str:
         """Convert to JSON string."""
@@ -57,7 +56,7 @@ class Connection:
     websocket: WebSocket
     user_id: str
     connection_type: str  # "operator" or "dashboard"
-    connected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    connected_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -71,7 +70,7 @@ class ConnectionManager:
     - Direct messaging to specific users
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         # All active connections
         self._connections: dict[str, Connection] = {}
 

@@ -1,15 +1,15 @@
 """SQLAlchemy ORM models."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     Enum,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -23,7 +23,7 @@ from app.models.lead import LeadStatus
 
 def utc_now() -> datetime:
     """Timezone-aware UTC now for defaults."""
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class CampaignDB(Base):

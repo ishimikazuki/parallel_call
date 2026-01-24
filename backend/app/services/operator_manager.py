@@ -1,7 +1,7 @@
 """Operator management service."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -51,13 +51,13 @@ class OperatorSession:
         """Get how long operator has been idle."""
         if self._idle_since is None:
             return 0.0
-        return (datetime.now(timezone.utc) - self._idle_since).total_seconds()
+        return (datetime.now(UTC) - self._idle_since).total_seconds()
 
     def go_online(self) -> None:
         """Set operator to available status."""
         self.status = OperatorStatus.AVAILABLE
-        self._idle_since = datetime.now(timezone.utc)
-        self.session_started_at = datetime.now(timezone.utc)
+        self._idle_since = datetime.now(UTC)
+        self.session_started_at = datetime.now(UTC)
 
     def go_offline(self) -> None:
         """Set operator to offline status."""
@@ -77,13 +77,13 @@ class OperatorSession:
         self.status = OperatorStatus.ON_CALL
         self.current_call_sid = call_sid
         self.current_lead_id = lead_id
-        self._call_started_at = datetime.now(timezone.utc)
+        self._call_started_at = datetime.now(UTC)
         self._idle_since = None
 
     def end_call(self) -> None:
         """End the current call and return to available."""
         if self._call_started_at:
-            call_duration = (datetime.now(timezone.utc) - self._call_started_at).total_seconds()
+            call_duration = (datetime.now(UTC) - self._call_started_at).total_seconds()
             self.total_talk_time_seconds += int(call_duration)
             self.calls_handled += 1
 
@@ -91,7 +91,7 @@ class OperatorSession:
         self.current_call_sid = None
         self.current_lead_id = None
         self._call_started_at = None
-        self._idle_since = datetime.now(timezone.utc)
+        self._idle_since = datetime.now(UTC)
 
     def go_on_break(self) -> None:
         """Set operator to break status."""
@@ -101,7 +101,7 @@ class OperatorSession:
     def return_from_break(self) -> None:
         """Return from break to available status."""
         self.status = OperatorStatus.AVAILABLE
-        self._idle_since = datetime.now(timezone.utc)
+        self._idle_since = datetime.now(UTC)
 
     def start_wrap_up(self) -> None:
         """Start wrap-up time after a call."""
@@ -111,7 +111,7 @@ class OperatorSession:
     def end_wrap_up(self) -> None:
         """End wrap-up and return to available."""
         self.status = OperatorStatus.AVAILABLE
-        self._idle_since = datetime.now(timezone.utc)
+        self._idle_since = datetime.now(UTC)
 
     def is_available(self) -> bool:
         """Check if operator can receive calls."""

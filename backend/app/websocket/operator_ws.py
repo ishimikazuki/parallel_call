@@ -3,14 +3,14 @@
 import json
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
-from app.services.auth_service import verify_access_token, get_user
-from app.services.operator_manager import OperatorSession, OperatorStatus
+from app.services.auth_service import get_user, verify_access_token
+from app.services.operator_manager import OperatorSession
 from app.websocket.connection_manager import (
-    manager,
     EventType,
     WebSocketMessage,
+    manager,
 )
 
 router = APIRouter()
@@ -19,7 +19,7 @@ router = APIRouter()
 operator_sessions: dict[str, OperatorSession] = {}
 
 
-async def authenticate_websocket(token: str | None) -> dict | None:
+async def authenticate_websocket(token: str | None) -> dict[str, Any] | None:
     """Authenticate WebSocket connection using JWT token."""
     if not token:
         return None
@@ -105,7 +105,10 @@ async def handle_operator_message(
         session = operator_sessions.get(user_id)
 
         if session:
-            session.start_call(call_sid=call_sid, lead_id=message.get("lead_id", ""))
+            session.start_call(
+                call_sid=str(call_sid) if call_sid is not None else "",
+                lead_id=str(message.get("lead_id", "")),
+            )
 
         # Broadcast to dashboards
         await manager.broadcast_to_dashboards(
@@ -161,8 +164,8 @@ async def handle_operator_message(
 @router.websocket("/ws/operator")
 async def operator_websocket(
     websocket: WebSocket,
-    token: str = Query(None),
-):
+    token: str | None = Query(None),
+) -> None:
     """
     WebSocket endpoint for operators.
 

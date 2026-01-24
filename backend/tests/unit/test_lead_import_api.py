@@ -1,11 +1,10 @@
 """Unit tests for Lead Import API."""
 
-import io
 import pytest
 from httpx import AsyncClient
 
-from app.main import app
 from app.api.v1.campaigns import CAMPAIGNS_DB
+from app.main import app
 
 
 @pytest.fixture

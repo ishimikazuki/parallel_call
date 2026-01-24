@@ -1,23 +1,27 @@
 """Dashboard WebSocket handler."""
 
 import json
-from typing import Any
+from typing import Any, Annotated
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.auth_service import verify_access_token, get_user
-from app.api.v1.campaigns import CAMPAIGNS_DB
-from app.websocket.operator_ws import operator_sessions
+from app.db.models import CampaignDB, LeadDB
+from app.db.session import get_session
+from app.models.lead import LeadStatus
+from app.services.auth_service import get_user, verify_access_token
 from app.websocket.connection_manager import (
-    manager,
     EventType,
     WebSocketMessage,
+    manager,
 )
+from app.websocket.operator_ws import operator_sessions
 
 router = APIRouter()
 
 
-async def authenticate_websocket(token: str | None) -> dict | None:
+async def authenticate_websocket(token: str | None) -> dict[str, Any] | None:
     """Authenticate WebSocket connection using JWT token."""
     if not token:
         return None
@@ -33,24 +37,56 @@ async def authenticate_websocket(token: str | None) -> dict | None:
     return get_user(username)
 
 
-def get_campaign_stats(campaign_id: str) -> dict[str, Any] | None:
+async def get_campaign_stats(
+    session: AsyncSession,
+    campaign_id: str,
+) -> dict[str, Any] | None:
     """Get campaign statistics."""
-    campaign = CAMPAIGNS_DB.get(campaign_id)
+    campaign = await session.get(CampaignDB, campaign_id)
     if not campaign:
         return None
 
-    stats = campaign.get_stats()
+    stmt = (
+        select(LeadDB.status, func.count(LeadDB.id))
+        .where(LeadDB.campaign_id == campaign_id)
+        .group_by(LeadDB.status)
+    )
+    result = await session.execute(stmt)
+
+    pending = calling = connected = completed = failed = dnc = 0
+    total = 0
+
+    for status_value, count in result.all():
+        count = int(count)
+        total += count
+        status = status_value if isinstance(status_value, LeadStatus) else LeadStatus(status_value)
+        if status == LeadStatus.PENDING:
+            pending += count
+        elif status == LeadStatus.CALLING:
+            calling += count
+        elif status == LeadStatus.CONNECTED:
+            connected += count
+        elif status == LeadStatus.COMPLETED:
+            completed += count
+        elif status == LeadStatus.FAILED:
+            failed += count
+        elif status == LeadStatus.DNC:
+            dnc += count
+
+    abandon_rate = 0.0
+
     return {
         "campaign_id": campaign_id,
         "name": campaign.name,
-        "status": campaign.status.value,
-        "total_leads": stats.total_leads,
-        "pending_leads": stats.pending_leads,
-        "calling_leads": stats.calling_leads,
-        "connected_leads": stats.connected_leads,
-        "completed_leads": stats.completed_leads,
-        "failed_leads": stats.failed_leads,
-        "abandon_rate": stats.abandon_rate,
+        "status": campaign.status.value if hasattr(campaign.status, "value") else str(campaign.status),
+        "total_leads": total,
+        "pending_leads": pending,
+        "calling_leads": calling,
+        "connected_leads": connected,
+        "completed_leads": completed,
+        "failed_leads": failed,
+        "dnc_leads": dnc,
+        "abandon_rate": abandon_rate,
     }
 
 
@@ -73,6 +109,7 @@ async def handle_dashboard_message(
     user_id: str,
     message: dict[str, Any],
     websocket: WebSocket,
+    session: AsyncSession,
 ) -> WebSocketMessage | None:
     """
     Handle incoming message from dashboard.
@@ -86,7 +123,13 @@ async def handle_dashboard_message(
 
     elif action == "subscribe_campaign":
         campaign_id = message.get("campaign_id")
-        stats = get_campaign_stats(campaign_id)
+        if not isinstance(campaign_id, str):
+            return WebSocketMessage(
+                event=EventType.ERROR,
+                data={"message": "campaign_id is required"},
+            )
+
+        stats = await get_campaign_stats(session, campaign_id)
 
         if stats:
             return WebSocketMessage(
@@ -119,8 +162,8 @@ async def handle_dashboard_message(
 
     elif action == "refresh_stats":
         campaign_id = message.get("campaign_id")
-        if campaign_id:
-            stats = get_campaign_stats(campaign_id)
+        if isinstance(campaign_id, str):
+            stats = await get_campaign_stats(session, campaign_id)
             if stats:
                 return WebSocketMessage(
                     event=EventType.CAMPAIGN_STATS_UPDATED,
@@ -133,8 +176,9 @@ async def handle_dashboard_message(
 @router.websocket("/ws/dashboard")
 async def dashboard_websocket(
     websocket: WebSocket,
-    token: str = Query(None),
-):
+    session: Annotated[AsyncSession, Depends(get_session)],
+    token: str | None = Query(None),
+) -> None:
     """
     WebSocket endpoint for dashboard.
 
@@ -169,7 +213,7 @@ async def dashboard_websocket(
                 data = await websocket.receive_text()
                 message = json.loads(data)
 
-                response = await handle_dashboard_message(user_id, message, websocket)
+                response = await handle_dashboard_message(user_id, message, websocket, session)
                 if response:
                     # Handle ping specially
                     if response.event == EventType.PING:

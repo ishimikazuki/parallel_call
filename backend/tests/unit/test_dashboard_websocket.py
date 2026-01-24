@@ -2,6 +2,7 @@
 
 import pytest
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from app.main import app
 
@@ -33,7 +34,7 @@ class TestDashboardWebSocketConnection:
 
     def test_connect_without_token_fails(self, client: TestClient):
         """トークンなしで接続失敗"""
-        with pytest.raises(Exception):
+        with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect("/ws/dashboard") as websocket:
                 websocket.receive_json()
 

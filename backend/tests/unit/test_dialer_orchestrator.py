@@ -1,7 +1,5 @@
 """Unit tests for DialerOrchestrator."""
 
-import pytest
-from datetime import datetime, timezone
 
 from app.models.campaign import Campaign, CampaignStats
 from app.models.lead import Lead

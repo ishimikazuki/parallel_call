@@ -4,7 +4,6 @@ import csv
 import io
 import re
 from dataclasses import dataclass
-from typing import Iterator
 
 
 @dataclass

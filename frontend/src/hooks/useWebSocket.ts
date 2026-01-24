@@ -3,7 +3,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { WSMessage, WSEventType } from "../types";
+import type { WSMessage } from "../types";
 
 interface UseWebSocketOptions {
   url: string;

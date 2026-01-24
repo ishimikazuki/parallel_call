@@ -10,15 +10,12 @@ Tests the complete call flow:
 7. Call ends, lead marked completed
 """
 
+
 import pytest
-from unittest.mock import AsyncMock, patch
-from starlette.testclient import TestClient
 from fastapi import status
+from starlette.testclient import TestClient
 
 from app.main import app
-from app.models.lead import LeadStatus
-from app.models.campaign import CampaignStatus
-from app.api.v1.campaigns import CAMPAIGNS_DB, Campaign
 
 
 @pytest.fixture

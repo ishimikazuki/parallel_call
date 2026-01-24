@@ -1,14 +1,14 @@
 """FastAPI application entry point."""
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
 from app.api.v1 import auth, campaigns, webhooks
-from app.websocket import operator_ws, dashboard_ws
+from app.config import get_settings
+from app.websocket import dashboard_ws, operator_ws
 
 
 @asynccontextmanager

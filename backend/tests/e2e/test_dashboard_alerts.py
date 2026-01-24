@@ -7,10 +7,10 @@ Tests the alert system:
 4. System error alerts
 """
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
-from datetime import datetime, timedelta, timezone
 from starlette.testclient import TestClient
-from fastapi import status
 
 from app.main import app
 from app.models.campaign import CampaignStats
@@ -44,7 +44,7 @@ class TestLongIdleOperatorAlert:
         op1 = OperatorSession(id="op1", name="Long Idle Op")
         op1.status = OperatorStatus.AVAILABLE
         # Simulate 10 minutes idle
-        op1._idle_since = datetime.now(timezone.utc) - timedelta(minutes=10)
+        op1._idle_since = datetime.now(UTC) - timedelta(minutes=10)
         manager.add_operator(op1)
 
         # Check idle duration
@@ -58,11 +58,11 @@ class TestLongIdleOperatorAlert:
         # Add multiple operators
         op1 = OperatorSession(id="op1", name="Short Idle")
         op1.status = OperatorStatus.AVAILABLE
-        op1._idle_since = datetime.now(timezone.utc) - timedelta(minutes=2)
+        op1._idle_since = datetime.now(UTC) - timedelta(minutes=2)
 
         op2 = OperatorSession(id="op2", name="Long Idle")
         op2.status = OperatorStatus.AVAILABLE
-        op2._idle_since = datetime.now(timezone.utc) - timedelta(minutes=10)
+        op2._idle_since = datetime.now(UTC) - timedelta(minutes=10)
 
         op3 = OperatorSession(id="op3", name="On Call")
         op3.status = OperatorStatus.ON_CALL

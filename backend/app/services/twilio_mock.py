@@ -2,8 +2,8 @@
 
 import asyncio
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable
 
 from app.services.twilio_protocol import (
     AMDResult,
