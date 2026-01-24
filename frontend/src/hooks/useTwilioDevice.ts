@@ -76,10 +76,10 @@ export function useTwilioDevice({
     const initDevice = async () => {
       try {
         // Dynamic import to avoid SSR issues
-        const { Device } = await import("@twilio/voice-sdk");
+        const { Device, Call } = await import("@twilio/voice-sdk");
 
         const device = new Device(token, {
-          codecPreferences: ["opus", "pcmu"],
+          codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
           enableRingingState: true,
         });
 

@@ -17,6 +17,12 @@ export interface AuthTokens {
   token_type: string;
 }
 
+export interface TokenRefreshResponse {
+  access_token: string;
+  token_type: string;
+  refresh_token?: string;
+}
+
 // Lead
 export type LeadStatus =
   | "pending"

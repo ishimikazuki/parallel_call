@@ -69,10 +69,10 @@ export const useAuthStore = create<AuthState>()(
         }
 
         try {
-          const tokens: AuthTokens = await authApi.refresh(refreshToken);
+          const tokens = await authApi.refresh(refreshToken);
           set({
             accessToken: tokens.access_token,
-            refreshToken: tokens.refresh_token,
+            refreshToken: tokens.refresh_token ?? refreshToken,
           });
         } catch {
           // Refresh failed, logout
@@ -85,7 +85,7 @@ export const useAuthStore = create<AuthState>()(
         if (!accessToken) return;
 
         try {
-          const user = await authApi.me(accessToken) as User;
+          const user = await authApi.me(accessToken);
           set({ user });
         } catch (err) {
           if (err instanceof ApiError && err.status === 401) {

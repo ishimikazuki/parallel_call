@@ -2,6 +2,8 @@
  * API client for ParallelDialer backend
  */
 
+import type { AuthTokens, TokenRefreshResponse, User } from "../types";
+
 const API_BASE = "/api/v1";
 
 interface RequestOptions extends RequestInit {
@@ -49,7 +51,7 @@ async function request<T>(
 
 // Auth API
 export const authApi = {
-  login: async (username: string, password: string) => {
+  login: async (username: string, password: string): Promise<AuthTokens> => {
     const formData = new URLSearchParams();
     formData.append("username", username);
     formData.append("password", password);
@@ -64,16 +66,16 @@ export const authApi = {
       throw new ApiError(response.status, response.statusText, await response.json());
     }
 
-    return response.json();
+    return response.json() as Promise<AuthTokens>;
   },
 
   refresh: (refreshToken: string) =>
-    request("/auth/refresh", {
+    request<TokenRefreshResponse>("/auth/refresh", {
       method: "POST",
       body: JSON.stringify({ refresh_token: refreshToken }),
     }),
 
-  me: (token: string) => request("/auth/me", { token }),
+  me: (token: string) => request<User>("/auth/me", { token }),
 };
 
 // Campaign API
