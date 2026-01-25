@@ -1,0 +1,68 @@
+name: Auto Fix CI Failures
+
+on:
+  workflow_run:
+    workflows: ["CI"]  # ← あなたのCIワークフロー名に変更してください
+    types: [completed]
+
+jobs:
+  create-fix-issue:
+    # CIが失敗した場合のみ実行（3回目以降はスキップして無限ループ防止）
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.run_attempt < 3
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Get failed run logs
+        id: logs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 失敗したジョブのログを取得
+          gh run view ${{ github.event.workflow_run.id }} --log-failed > failed_logs.txt 2>&1 || true
+          
+          # ログの最初の3000文字を取得
+          echo "logs<<EOF" >> $GITHUB_OUTPUT
+          head -c 3000 failed_logs.txt >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create fix issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "🤖 @claude CI修正依頼: ${{ github.event.workflow_run.name }} failed" \
+            --body "## CI自動修正リクエスト
+
+          **失敗したワークフロー:** ${{ github.event.workflow_run.name }}
+          **コミット:** ${{ github.event.workflow_run.head_sha }}
+          **ブランチ:** ${{ github.event.workflow_run.head_branch }}
+          **実行URL:** ${{ github.event.workflow_run.html_url }}
+
+          ### エラーログ（抜粋）
+          \`\`\`
+          ${{ steps.logs.outputs.logs }}
+          \`\`\`
+
+          ---
+
+          @claude このCIエラーを修正してください。
+
+          **手順:**
+          1. エラーログを分析して根本原因を特定
+          2. 最小限の修正を実装
+          3. 修正をコミット（メッセージ: \"fix(ci): [修正内容]\"）
+          4. 修正内容をPRで説明
+
+          **注意:**
+          - 既存の機能を壊さないように注意
+          - テストがあれば実行して確認" \
+            --label "auto-fix,ci-failure"
