@@ -14,6 +14,106 @@
   </metadata>
 
   <!-- ============================================================
+       PRD（現状実装ベース）
+       ============================================================ -->
+  <prd last_updated="2026-02-01">
+    <background>
+      テレアポ/インサイドセールスの現場では、
+      「ダイヤル → 呼び出し → 不在/留守電」の待機時間が大きく、
+      オペレーターの実通話時間が十分に確保できていない。
+    </background>
+
+    <value_proposition>
+      <item>人間が応答した通話だけを即時転送し、会話に集中させる</item>
+      <item>無駄な待機時間を削減し、稼働率と有効通話率を改善する</item>
+      <item>キャンペーン運用を可視化し、現場の管理コストを下げる</item>
+    </value_proposition>
+
+    <target_users>
+      <user>テレアポ代行会社</user>
+      <user>インサイドセールスチーム</user>
+      <user>督促/確認架電を行う企業</user>
+      <user>アンケート調査会社</user>
+    </target_users>
+
+    <success_metrics>
+      <metric>有効通話率: 現状比 300-500% 向上</metric>
+      <metric>オペレーター稼働率: 80%以上</metric>
+      <metric>転送レイテンシー: 2秒以内</metric>
+      <metric>放棄呼率: 3%以下</metric>
+    </success_metrics>
+
+    <non_goals>
+      <item>AIによる自動会話/初期トーク</item>
+      <item>CRM連携（Salesforce/HubSpot等）</item>
+      <item>IVR・録音同意フロー・WFMなどコールセンター全機能</item>
+      <item>厳密なマルチテナント権限制御</item>
+    </non_goals>
+
+    <use_cases>
+      <use_case id="UC1">管理者がキャンペーンを作成し、リードをCSVで投入</use_case>
+      <use_case id="UC2">オペレーターがWebで待機状態に入り、通話を受ける</use_case>
+      <use_case id="UC3">人間応答のみがオペレーターへ転送され、会話を行う</use_case>
+      <use_case id="UC4">管理者がダッシュボードで稼働状況を確認</use_case>
+    </use_cases>
+
+    <mvp_requirements>
+      <core_features>
+        <item>キャンペーン作成/開始/一時停止/再開/停止</item>
+        <item>リード管理（追加/一覧/CSVインポート、重複排除）</item>
+        <item>予測ダイヤルの基本ロジック（倍率調整）</item>
+        <item>応答検出（AMD）と即時転送（Conference Bridge）</item>
+        <item>オペレーター状態管理（オンライン/休憩/離席/後処理）</item>
+        <item>WebSocketによるリアルタイム通知（着信/状態/統計）</item>
+      </core_features>
+      <operations>
+        <item>JWT認証（access/refresh）</item>
+        <item>最低限の監視ログ（通話ステータス/AMD結果）</item>
+        <item>Twilio Webhook 署名検証のON/OFF</item>
+      </operations>
+    </mvp_requirements>
+
+    <non_functional_note>
+      非機能要件は後段の &lt;non_functional_requirements&gt; セクションに準拠する。
+    </non_functional_note>
+
+    <current_implementation>
+      <implemented>
+        <item>キャンペーン/リードのCRUD + CSVインポート</item>
+        <item>JWT認証（開発用 in-memory ユーザー）</item>
+        <item>WebSocket基盤（オペレーター/ダッシュボード）</item>
+        <item>Twilioアクセストークン発行</item>
+        <item>Twilio Webhook（voice/status/AMD）</item>
+      </implemented>
+      <not_yet>
+        <item>実発信オーケストレーションの運用接続</item>
+        <item>オペレーターUI/ダッシュボードUI（フロントはプレースホルダー）</item>
+        <item>オペレーター割当/空き管理の永続化</item>
+        <item>通話録音/保存・再生機能</item>
+        <item>KPI可視化の実画面</item>
+      </not_yet>
+    </current_implementation>
+
+    <risks>
+      <item>AMD精度: 日本環境で誤判定の可能性 → 事前検証</item>
+      <item>レイテンシー: 2秒以内転送が難しい → Conference Bridge方式で最適化</item>
+      <item>Twilio依存: 価格/障害リスク → Telephony 抽象化を検討</item>
+    </risks>
+
+    <future_expansion>
+      <item>CRM連携（Salesforce/HubSpot）</item>
+      <item>録音と自動要約</item>
+      <item>オペレーター評価ダッシュボード</item>
+      <item>AI初期トーク</item>
+    </future_expansion>
+
+    <notes>
+      提供価値は維持しつつ、現状実装に合わせて段階化したPRDとする。
+      以後は本PRDを基準に実装とドキュメントを整合させる。
+    </notes>
+  </prd>
+
+  <!-- ============================================================
        1. プロジェクト概要
        ============================================================ -->
   <overview>
