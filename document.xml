@@ -1369,6 +1369,12 @@ parallel-dialer/
       </e2e_tests>
     </testing_strategy>
 
+    <testing_guide_summary>
+      実際の操作テストは `TESTING_GUIDE.md` を参照。
+      現状はUIがプレースホルダーのため、APIとWebSocket中心で確認する。
+      自動発信は未接続のため、擬似着信（WebSocket）かTwilio番号への着信で代用する。
+    </testing_guide_summary>
+
   </implementation_guide>
 
 </project>

@@ -4,7 +4,7 @@
 
 import type { AuthTokens, TokenRefreshResponse, User } from "../types";
 
-const API_BASE = "/api/v1";
+const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api/v1";
 
 interface RequestOptions extends RequestInit {
   token?: string;
@@ -146,6 +146,15 @@ export const campaignApi = {
 
     return response.json() as Promise<import("../types").ImportResult>;
   },
+};
+
+// Twilio API
+export const twilioApi = {
+  token: (token: string) =>
+    request<{ token: string; identity: string }>("/twilio/token", {
+      method: "POST",
+      token,
+    }),
 };
 
 export { ApiError };

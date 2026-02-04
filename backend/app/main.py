@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import auth, campaigns, webhooks
+from app.api.v1 import auth, campaigns, twilio, webhooks
 from app.config import get_settings
 from app.websocket import dashboard_ws, operator_ws
 
@@ -36,7 +36,8 @@ def create_app() -> FastAPI:
     # CORS middleware
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173"],  # Vite dev server
+        allow_origins=settings.cors_origins,
+        allow_origin_regex=settings.cors_origin_regex,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     # Register routers
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(campaigns.router, prefix="/api/v1")
+    app.include_router(twilio.router, prefix="/api/v1")
     app.include_router(webhooks.router)  # No prefix - Twilio needs exact paths
 
     # WebSocket routers

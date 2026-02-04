@@ -26,6 +26,11 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
+def _enum_values(enum_cls: type[object]) -> list[str]:
+    """Return enum values for SQLAlchemy (avoid using enum names)."""
+    return [getattr(item, "value") for item in enum_cls]  # type: ignore[arg-type]
+
+
 class CampaignDB(Base):
     """Campaign table."""
 
@@ -35,7 +40,7 @@ class CampaignDB(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="", nullable=False)
     status: Mapped[CampaignStatus] = mapped_column(
-        Enum(CampaignStatus, name="campaign_status"),
+        Enum(CampaignStatus, name="campaign_status", values_callable=_enum_values),
         default=CampaignStatus.DRAFT,
         nullable=False,
     )
@@ -78,7 +83,7 @@ class LeadDB(Base):
     notes: Mapped[str | None] = mapped_column(Text)
 
     status: Mapped[LeadStatus] = mapped_column(
-        Enum(LeadStatus, name="lead_status"),
+        Enum(LeadStatus, name="lead_status", values_callable=_enum_values),
         default=LeadStatus.PENDING,
         nullable=False,
     )

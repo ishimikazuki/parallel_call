@@ -11,7 +11,8 @@
     "test": "vitest",
     "test:unit": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "ws:test": "APP_URL=http://localhost:5173/ API_BASE=http://127.0.0.1:8000 node scripts/cdp_ws_test.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.17.19",

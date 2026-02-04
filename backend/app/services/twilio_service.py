@@ -34,19 +34,32 @@ class TwilioService(TwilioServiceProtocol):
         machine_detection: bool = True,
     ) -> CallResult:
         """Initiate an outbound call via Twilio."""
+        settings = get_settings()
         call_params: dict[str, Any] = {
             "to": to,
             "from_": from_ or self._from_number,
-            "url": "http://demo.twilio.com/docs/voice.xml",  # TwiML instructions
         }
 
-        if status_callback_url:
-            call_params["status_callback"] = status_callback_url
+        if settings.twilio_app_sid:
+            call_params["application_sid"] = settings.twilio_app_sid
+        else:
+            call_params["url"] = "http://demo.twilio.com/docs/voice.xml"  # TwiML instructions
+
+        callback_url = status_callback_url
+        if not callback_url and settings.public_base_url:
+            callback_url = f"{settings.public_base_url.rstrip('/')}/webhooks/twilio/status"
+
+        if callback_url:
+            call_params["status_callback"] = callback_url
             call_params["status_callback_event"] = ["initiated", "ringing", "answered", "completed"]
 
         if machine_detection:
             call_params["machine_detection"] = "DetectMessageEnd"
             call_params["async_amd"] = True
+            if settings.public_base_url:
+                call_params["async_amd_status_callback"] = (
+                    f"{settings.public_base_url.rstrip('/')}/webhooks/twilio/amd"
+                )
 
         call = self._client.calls.create(**call_params)
 
