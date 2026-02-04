@@ -2,9 +2,47 @@
 
 # ruff: noqa: N803
 
-from fastapi import APIRouter, Form, Response
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
+from twilio.request_validator import RequestValidator
 
-router = APIRouter(prefix="/webhooks/twilio", tags=["webhooks"])
+from app.config import get_settings
+
+
+def _build_public_url(request: Request, public_base_url: str | None) -> str:
+    if not public_base_url:
+        return str(request.url)
+    return f"{public_base_url.rstrip('/')}{request.url.path}"
+
+
+async def verify_twilio_signature(request: Request) -> None:
+    """Validate Twilio webhook signature when enabled."""
+    settings = get_settings()
+    if not settings.twilio_validate_signature:
+        return
+
+    if not settings.twilio_auth_token:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Twilio auth token not configured",
+        )
+
+    signature = request.headers.get("X-Twilio-Signature")
+    if not signature:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Missing Twilio signature")
+
+    form = await request.form()
+    validator = RequestValidator(settings.twilio_auth_token)
+    url = _build_public_url(request, settings.public_base_url)
+
+    if not validator.validate(url, dict(form), signature):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Twilio signature")
+
+
+router = APIRouter(
+    prefix="/webhooks/twilio",
+    tags=["webhooks"],
+    dependencies=[Depends(verify_twilio_signature)],
+)
 
 
 def twiml_response(content: str) -> Response:

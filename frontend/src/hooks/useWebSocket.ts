@@ -156,7 +156,9 @@ export function useOperatorWebSocket(
     }
   }, [handlers]);
 
-  const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/operator`;
+  const defaultWsBase = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+  const wsBase = (import.meta.env.VITE_WS_BASE_URL ?? defaultWsBase).replace(/\/$/, "");
+  const wsUrl = `${wsBase}/ws/operator`;
 
   return useWebSocket({
     url: wsUrl,
@@ -187,7 +189,9 @@ export function useDashboardWebSocket(
     }
   }, [handlers]);
 
-  const wsUrl = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/dashboard`;
+  const defaultWsBase = `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`;
+  const wsBase = (import.meta.env.VITE_WS_BASE_URL ?? defaultWsBase).replace(/\/$/, "");
+  const wsUrl = `${wsBase}/ws/dashboard`;
 
   return useWebSocket({
     url: wsUrl,
